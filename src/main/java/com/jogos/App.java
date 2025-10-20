@@ -1,17 +1,22 @@
-// ...existing code...
 package com.jogos;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
+import javafx.geometry.Pos; // <--- adicionado
 import javafx.geometry.VPos;
 import javafx.scene.Scene;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
+import javafx.scene.layout.StackPane; // <--- adicionado
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
+import javafx.stage.Screen;                 // <--- adicionado
+import javafx.geometry.Rectangle2D;        // <--- adicionado
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.DoubleBinding;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -65,10 +70,30 @@ public class App extends Application {
         loadHighScore();
 
         root = new Pane();
-        Scene scene = new Scene(root, WIDTH, HEIGHT);
+        // garante que o root tenha o tamanho lógico do jogo e fique ancorado ao topo-esquerdo
+        root.setPrefSize(WIDTH, HEIGHT);
+        StackPane container = new StackPane(root);
+        StackPane.setAlignment(root, Pos.TOP_LEFT); // preserva o sistema de coordenadas original
+        container.setStyle("-fx-background-color: linear-gradient(#b3e5fc, #ffffff);");
+        Scene scene = new Scene(container, WIDTH, HEIGHT);
 
-        // background
-        root.setStyle("-fx-background-color: linear-gradient(#b3e5fc, #ffffff);");
+        // Ajuste automático para caber na tela: calcula escala e centraliza
+        Rectangle2D vb = Screen.getPrimary().getVisualBounds();
+        double maxW = Math.max(200, vb.getWidth() - 40);   // margem mínima
+        double maxH = Math.max(200, vb.getHeight() - 80);
+        double scale = Math.min(1.0, Math.min(maxW / WIDTH, maxH / HEIGHT));
+        // aplica escala no root (mantém layout relativo)
+        root.setScaleX(scale);
+        root.setScaleY(scale);
+        // define tamanho da janela e centraliza
+        double windowW = WIDTH * scale;
+        double windowH = HEIGHT * scale;
+        stage.setScene(scene);
+        stage.setWidth(windowW);
+        stage.setHeight(windowH);
+        stage.setX(vb.getMinX() + (vb.getWidth() - windowW) / 2);
+        stage.setY(vb.getMinY() + (vb.getHeight() - windowH) / 2);
+        stage.setResizable(false);
 
         // UI texts
         scoreText = createText(12, 28, "Score: 0", 18, Color.DARKBLUE);
@@ -81,8 +106,13 @@ public class App extends Application {
         root.getChildren().addAll(scoreText, livesText, highScoreText, infoText, msgText);
 
         // collector
-        collector = new Collector(WIDTH/2.0 - 60, HEIGHT - 80, 120, 22, Color.DODGERBLUE);
+        // aumentar altura para melhor visibilidade; reposiciona um pouco acima do fim
+        collector = new Collector(WIDTH/2.0 - 60, HEIGHT - 100, 120, 36, Color.DODGERBLUE);
+        // garante que a cesta tenha contorno e fique sempre visível à frente dos itens
+        collector.view.setStroke(Color.BLACK);
+        collector.view.setStrokeWidth(1.0);
         root.getChildren().add(collector.view);
+        collector.view.toFront();
 
         // input
         scene.setOnKeyPressed(e -> {
@@ -117,8 +147,26 @@ public class App extends Application {
         };
         timer.start();
 
-        stage.setTitle("ReciclaMack - Refatorado");
+        // Java
+        // após criar Scene scene = new Scene(root, WIDTH, HEIGHT);
+        DoubleBinding scaleBinding = Bindings.createDoubleBinding(
+            () -> {
+                double sw = scene.getWidth();
+                double sh = scene.getHeight();
+                double s = Math.min(sw / WIDTH, sh / HEIGHT);
+                return Math.max(0.5, Math.min(1.0, s)); // mantém escala entre 0.5 e 1.0
+            },
+            scene.widthProperty(), scene.heightProperty()
+        );
+        root.scaleXProperty().bind(scaleBinding);
+        root.scaleYProperty().bind(scaleBinding);
+        
+        // aplica a Scene e permite redimensionar (o binding cuida da escala)
         stage.setScene(scene);
+        stage.centerOnScreen();
+        stage.setResizable(true);
+
+        stage.setTitle("ReciclaMack - Refatorado");
         stage.show();
     }
 
@@ -213,6 +261,8 @@ public class App extends Application {
         GameItem gi = new GameItem(type, x, y, size, color);
         items.add(gi);
         root.getChildren().add(gi.view);
+        // garante que a cesta continue em primeiro plano após spawnar novos itens
+        if (collector != null) collector.view.toFront();
     }
 
     private void applyItemEffect(ItemType type) {
