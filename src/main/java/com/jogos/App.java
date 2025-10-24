@@ -2,21 +2,28 @@ package com.jogos;
 
 import javafx.animation.AnimationTimer;
 import javafx.application.Application;
-import javafx.geometry.Pos; // <--- adicionado
+import javafx.geometry.Pos;
 import javafx.geometry.VPos;
 import javafx.scene.Scene;
 import javafx.scene.input.KeyCode;
 import javafx.scene.layout.Pane;
-import javafx.scene.layout.StackPane; // <--- adicionado
+import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.scene.text.Text;
 import javafx.stage.Stage;
-import javafx.stage.Screen;                 // <--- adicionado
-import javafx.geometry.Rectangle2D;        // <--- adicionado
+import javafx.stage.Screen;
+import javafx.geometry.Rectangle2D;
 import javafx.beans.binding.Bindings;
 import javafx.beans.binding.DoubleBinding;
+
+// --- Imports Adicionados ---
+import javafx.scene.Node; // Importante: Usado tanto no GameItem quanto no Collector
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
+import java.io.InputStream;
+// --- Fim dos Imports Adicionados ---
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -27,6 +34,8 @@ import java.util.concurrent.ThreadLocalRandom;
 /**
  * Versão refatorada: orientação a objetos, melhor UX (menu, pausa, reinício),
  * movimento suave, configuração centralizada e persistência de highscore.
+ * --- MODIFICADO para incluir imagem PNG para o item REUSE ---
+ * --- MODIFICADO (2) para incluir imagem PNG para o COLLECTOR ---
  */
 public class App extends Application {
 
@@ -46,6 +55,8 @@ public class App extends Application {
     private Pane root;
     private Text scoreText, livesText, infoText, highScoreText, msgText;
     private Collector collector;
+    private Image reuseImage; // <-- Para o item "DirtyPaper.png"
+    private Image collectorImage; // <-- NOVO: Para a lixeira "MackTrashBin.png"
 
     // --- game state / manager ---
     private final List<GameItem> items = new ArrayList<>();
@@ -68,6 +79,7 @@ public class App extends Application {
     @Override
     public void start(Stage stage) {
         loadHighScore();
+        loadImages(); // <-- Carrega AMBAS as imagens
 
         root = new Pane();
         // garante que o root tenha o tamanho lógico do jogo e fique ancorado ao topo-esquerdo
@@ -79,7 +91,7 @@ public class App extends Application {
 
         // Ajuste automático para caber na tela: calcula escala e centraliza
         Rectangle2D vb = Screen.getPrimary().getVisualBounds();
-        double maxW = Math.max(200, vb.getWidth() - 40);   // margem mínima
+        double maxW = Math.max(200, vb.getWidth() - 40);      // margem mínima
         double maxH = Math.max(200, vb.getHeight() - 80);
         double scale = Math.min(1.0, Math.min(maxW / WIDTH, maxH / HEIGHT));
         // aplica escala no root (mantém layout relativo)
@@ -105,14 +117,26 @@ public class App extends Application {
 
         root.getChildren().addAll(scoreText, livesText, highScoreText, infoText, msgText);
 
-        // collector
-        // aumentar altura para melhor visibilidade; reposiciona um pouco acima do fim
-        collector = new Collector(WIDTH/2.0 - 60, HEIGHT - 100, 120, 36, Color.DODGERBLUE);
-        // garante que a cesta tenha contorno e fique sempre visível à frente dos itens
-        collector.view.setStroke(Color.BLACK);
-        collector.view.setStrokeWidth(1.0);
+        // --- collector (MODIFICADO) ---
+        // Define as dimensões desejadas para a lixeira
+        double collectorW = 120;
+        double collectorH = 120; // Ajuste a altura conforme necessário para a imagem
+        double collectorX = WIDTH/2.0 - (collectorW / 2.0);
+        double collectorY = HEIGHT - 130; // Posição Y (distância do fundo)
+
+        if (collectorImage != null) {
+            // Usa a imagem se ela foi carregada
+            collector = new Collector(collectorX, collectorY, collectorW, collectorH, collectorImage);
+        } else {
+            // Fallback: Usa o retângulo azul se a imagem falhar
+            System.err.println("Fallback: Usando retângulo azul para o coletor.");
+            collector = new Collector(collectorX, HEIGHT - 100, collectorW, 36, Color.DODGERBLUE);
+        }
+
+        // Garante que a lixeira (Node) fique sempre visível à frente dos itens
         root.getChildren().add(collector.view);
         collector.view.toFront();
+        // --- Fim da modificação do collector ---
 
         // input
         scene.setOnKeyPressed(e -> {
@@ -166,8 +190,42 @@ public class App extends Application {
         stage.centerOnScreen();
         stage.setResizable(true);
 
-        stage.setTitle("ReciclaMack - Refatorado");
+        stage.setTitle("ReciclaMack - Refatorado (com Imagem)");
         stage.show();
+    }
+
+    // --- Método loadImages() MODIFICADO ---
+    /**
+     * Carrega as imagens do jogo a partir dos recursos (classpath).
+     */
+    private void loadImages() {
+        // 1. Carrega 'DirtyPaper.png' (item REUSE)
+        try (InputStream is = App.class.getResourceAsStream("DirtyPaper.png")) {
+            if (is == null) {
+                System.err.println("Erro: Não foi possível encontrar 'DirtyPaper.png' no pacote 'com.jogos'. Usando cor de fallback.");
+                reuseImage = null;
+            } else {
+                reuseImage = new Image(is);
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao carregar 'DirtyPaper.png'.");
+            e.printStackTrace();
+            reuseImage = null;
+        }
+        
+        // 2. NOVO: Carrega 'MackTrashBin.png' (Coletor)
+        try (InputStream is = App.class.getResourceAsStream("MackTrashBin.png")) {
+            if (is == null) {
+                System.err.println("Erro: Não foi possível encontrar 'MackTrashBin.png' no pacote 'com.jogos'. Usando fallback.");
+                collectorImage = null;
+            } else {
+                collectorImage = new Image(is);
+            }
+        } catch (Exception e) {
+            System.err.println("Erro ao carregar 'MackTrashBin.png'.");
+            e.printStackTrace();
+            collectorImage = null;
+        }
     }
 
     // --- high level actions ---
@@ -221,7 +279,7 @@ public class App extends Application {
             spawnTimer = 0;
             spawnInterval = Math.max(0.25, spawnInterval * SPAWN_ACCEL);
             itemSpeed += 2.0;
-            spawnItem();
+            spawnItem(); // <-- Método foi modificado
         }
 
         // move items
@@ -236,7 +294,7 @@ public class App extends Application {
                 root.getChildren().remove(gi.view);
                 score = Math.max(0, score - 1);
                 updateUI();
-            } else if (collector.intersects(gi)) {
+            } else if (collector.intersects(gi)) { // <-- Intersecção funciona com Node
                 // caught
                 applyItemEffect(gi.type);
                 it.remove();
@@ -247,18 +305,33 @@ public class App extends Application {
     }
 
     // --- item handling ---
+    /**
+     * Método modificado para usar a imagem 'reuseImage' se disponível
+     * para o tipo REUSE, ou uma cor como fallback.
+     */
     private void spawnItem() {
         ItemType type = ItemType.values()[rng.nextInt(ItemType.values().length)];
-        Color color = switch (type) {
-            case METAL -> Color.GOLD;
-            case BATTERY -> Color.CRIMSON;
-            case PLASTIC -> Color.LIMEGREEN;
-            case REUSE -> Color.LIGHTGRAY;
-        };
         double size = 36;
         double x = rng.nextDouble(10, Math.max(10, WIDTH - size - 10));
         double y = -size - rng.nextDouble(10, 80);
-        GameItem gi = new GameItem(type, x, y, size, color);
+
+        GameItem gi;
+
+        // Verifica se é REUSE e se a imagem foi carregada com sucesso
+        if (type == ItemType.REUSE && reuseImage != null) {
+            // Usa o construtor de Imagem
+            gi = new GameItem(type, x, y, size, reuseImage);
+        } else {
+            // Lógica original: Usa o construtor de Cor
+            Color color = switch (type) {
+                case METAL -> Color.GOLD;
+                case BATTERY -> Color.CRIMSON;
+                case PLASTIC -> Color.LIMEGREEN;
+                case REUSE -> Color.LIGHTGRAY; // Cor de fallback se a imagem falhar
+            };
+            gi = new GameItem(type, x, y, size, color);
+        }
+
         items.add(gi);
         root.getChildren().add(gi.view);
         // garante que a cesta continue em primeiro plano após spawnar novos itens
@@ -285,7 +358,7 @@ public class App extends Application {
     // --- UI helpers ---
     private void updateUI() {
         scoreText.setText("Score: " + score);
-        livesText.setText("Lives: " + lives);
+        livesText.setText("Lives: " + lives); // Corrigido: Removido 'D'
         highScoreText.setText("High: " + highScore);
     }
 
@@ -317,44 +390,96 @@ public class App extends Application {
         } catch (IOException ignored) { }
     }
 
-    // --- small OOP model classes ---
+    // --- Classe Collector MODIFICADA ---
     private static final class Collector {
-        final Rectangle view;
+        final Node view; // <-- Alterado de Rectangle para Node
         double x, y, w, h;
+
+        /**
+         * Construtor para Coletor baseado em Cor (Cria um Rectangle)
+         */
         Collector(double x, double y, double w, double h, Color color) {
             this.x = x; this.y = y; this.w = w; this.h = h;
-            view = new Rectangle(w, h, color);
+            this.view = new Rectangle(w, h, color); // Usa Rectangle
+            // Adiciona borda preta para o retângulo de fallback
+            ((Rectangle)this.view).setStroke(Color.BLACK);
+            ((Rectangle)this.view).setStrokeWidth(1.0);
+            updateView();
+        }
+        
+        /**
+         * NOVO Construtor para Coletor baseado em Imagem (Cria um ImageView)
+         */
+        Collector(double x, double y, double w, double h, Image image) {
+            this.x = x; this.y = y; this.w = w; this.h = h;
+            ImageView iv = new ImageView(image);
+            iv.setFitWidth(w);
+            iv.setFitHeight(h);
+            iv.setPreserveRatio(true); // Mantém a proporção
+            this.view = iv; // Usa ImageView
+            updateView();
+        }
+
+        void moveBy(double dx) {
+            x += dx;
+            updateView();
+        }
+
+        void clamp(double minX, double maxWidth) {
+            x = Math.max(minX, Math.min(maxWidth - w, x));
+            updateView();
+        }
+        
+        void updateView() {
             view.setTranslateX(x);
             view.setTranslateY(y);
         }
-        void moveBy(double dx) {
-            x += dx;
-            view.setTranslateX(x);
-        }
-        void clamp(double minX, double maxWidth) {
-            x = Math.max(minX, Math.min(maxWidth - w, x));
-            view.setTranslateX(x);
-        }
+
         boolean intersects(GameItem gi) {
+            // Funciona com Node (Rectangle ou ImageView)
             return gi.view.getBoundsInParent().intersects(view.getBoundsInParent());
         }
     }
+    // --- Fim da Classe Collector Modificada ---
 
+
+    // --- Classe GameItem (Original modificada) ---
     private static final class GameItem {
-        final Rectangle view;
+        final Node view; // <-- Alterado de Rectangle para Node
         final ItemType type;
         double x, y, size;
+
+        /**
+         * Construtor para Itens baseados em Cor (Cria um Rectangle)
+         */
         GameItem(ItemType type, double x, double y, double size, Color color) {
             this.type = type;
             this.x = x; this.y = y; this.size = size;
-            view = new Rectangle(size, size, color);
+            this.view = new Rectangle(size, size, color); // Usa Rectangle
             updateView();
         }
+
+        /**
+         * Novo Construtor para Itens baseados em Imagem (Cria um ImageView)
+         */
+        GameItem(ItemType type, double x, double y, double size, Image image) {
+            this.type = type;
+            this.x = x; this.y = y; this.size = size;
+            ImageView iv = new ImageView(image);
+            iv.setFitWidth(size);
+            iv.setFitHeight(size);
+            iv.setPreserveRatio(true); // Mantém a proporção da imagem
+            this.view = iv; // Usa ImageView
+            updateView();
+        }
+
         void updateView() {
             view.setTranslateX(x);
             view.setTranslateY(y);
         }
     }
+    // --- Fim da Classe GameItem ---
+
 
     public static void main(String[] args) {
         launch(args);
