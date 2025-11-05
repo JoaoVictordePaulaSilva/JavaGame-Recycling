@@ -1,5 +1,6 @@
 package com.jogos;
 
+import com.jogos.utils.ImageUtils;
 import javafx.application.Platform;
 import javafx.geometry.Bounds;
 import javafx.geometry.Rectangle2D;
@@ -9,161 +10,138 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
-import javafx.scene.shape.StrokeType;
 
 /**
- * Collector que mantém:
- * - imagem renderizada com preserveRatio
- * - hitbox (Rectangle) alinhada ao content renderizado da imagem
- * - métodos para debug / padding e cálculo de colisão previsível
+ * Collector:
+ * - Usa ImageLoader + ImageUtils para calcular a hitbox baseada na área visível da png.
+ * - Escala automaticamente segundo o desiredHeight passado no construtor.
+ * - Exponhe métodos para movimentação, interseção com GameItem e toggle de hitbox.
  */
 public class Collector {
-    public final Node view; // Group contendo imageView + hitbox
-    private final ImageView imageView; // null no fallback
-    private final Rectangle visualRect; // fallback quando sem imagem
-    private final Rectangle hitboxRect; // retângulo usado para colisão e debug (local ao group)
-    public double x, y, w, h; // coordenadas lógicas do collector
-    private double collisionInset = 0; // pixels a remover do hitbox por borda
-    private boolean debug = false;
-    private double hitboxExtraTop = 0; // ajustes finos se quiser expandir para cima
-    private double hitboxExtraBottom = 0; // ... ou para baixo
 
-    // fallback sem imagem
-    public Collector(double x, double y, double w, double h, Color color) {
-        this.x = x; this.y = y; this.w = w; this.h = h;
-        imageView = null;
-        visualRect = new Rectangle(w, h, color);
-        visualRect.setStroke(Color.BLACK);
-        visualRect.setStrokeWidth(1.0);
+    private final Group node;         // imageView + hitbox rect
+    private final ImageView imageView;
+    private final Rectangle hitboxRect;
 
-        hitboxRect = new Rectangle(w, h);
-        hitboxRect.setFill(Color.color(1, 1, 1, 0));
-        hitboxRect.setStroke(Color.color(1, 0, 0, 0));
-        hitboxRect.setStrokeType(StrokeType.INSIDE);
+    // logical position (node.translateX/Y)
+    public double x, y;
+    private final double desiredHeight; // altura lógica (em px na tela)
 
-        Group g = new Group(visualRect, hitboxRect);
-        this.view = g;
-        updateView();
-    }
+    // visible bounds from image (in image pixels)
+    private final Rectangle2D visibleInImage;
 
-    // com imagem: preserva proporção e depois calcula hitbox conforme conteúdo renderizado
-    public Collector(double x, double y, double w, double h, Image image) {
-        this.x = x; this.y = y; this.w = w; this.h = h;
+    // rendered sizes (computed)
+    private double renderedW = 0;
+    private double renderedH = 0;
+    private double hitboxXLocal = 0;
+    private double hitboxYLocal = 0;
 
-        imageView = new ImageView(image);
-        // usaremos fitHeight para manter proporção e tamanho previsível
+    // input state
+    private boolean left = false;
+    private boolean right = false;
+
+    public Collector(double x, double y, double desiredHeight) {
+        this.x = x;
+        this.y = y;
+        this.desiredHeight = desiredHeight;
+
+        // load image
+        Image img = ImageLoader.load("MackTrashBin.png");
+        Rectangle2D visible = ImageLoader.getVisibleBounds("MackTrashBin.png");
+        this.visibleInImage = visible != null ? visible : new Rectangle2D(0, 0, img.getWidth(), img.getHeight());
+
+        imageView = new ImageView(img);
+        // use viewport to focus on visible area
+        imageView.setViewport(this.visibleInImage);
+
+        // fit by height (keeps aspect ratio of viewport)
+        imageView.setFitHeight(desiredHeight);
         imageView.setPreserveRatio(true);
         imageView.setSmooth(true);
-        imageView.setFitHeight(h);   // força altura lógica; largura será ajustada pela proporção
 
-        visualRect = null;
+        // empty hitbox rect; size will be computed once imageView layout is resolved
+        hitboxRect = new Rectangle(10, 10);
+        hitboxRect.setFill(Color.color(1, 0, 0, 0.0));
+        hitboxRect.setStroke(Color.RED);
+        hitboxRect.setStrokeWidth(2);
+        hitboxRect.setVisible(false);
 
-        hitboxRect = new Rectangle(Math.max(0, w), Math.max(0, h));
-        hitboxRect.setFill(Color.color(1, 1, 1, 0));
-        hitboxRect.setStroke(Color.color(1, 0, 0, 0));
-        hitboxRect.setStrokeType(StrokeType.INSIDE);
+        node = new Group(imageView, hitboxRect);
 
-        Group g = new Group(imageView, hitboxRect);
-        this.view = g;
-
-        // após a ImageView calcular seu tamanho, alinhar a imagem e atualizar hitbox
-        imageView.boundsInLocalProperty().addListener((obs, oldB, newB) -> Platform.runLater(this::updateHitboxFromImage));
+        // schedule hitbox compute after layout
         Platform.runLater(this::updateHitboxFromImage);
 
         updateView();
     }
 
     private void updateHitboxFromImage() {
-        if (imageView == null) {
-            // fallback: use w/h
-            hitboxRect.setTranslateX(collisionInset);
-            hitboxRect.setTranslateY(collisionInset);
-            hitboxRect.setWidth(Math.max(0, w - 2 * collisionInset));
-            hitboxRect.setHeight(Math.max(0, h - 2 * collisionInset));
-            return;
-        }
+        // imageView.getBoundsInLocal gives rendered viewport size
+        Bounds b = imageView.getBoundsInLocal();
+        renderedW = b.getWidth();
+        renderedH = b.getHeight();
 
-        Bounds b = imageView.getBoundsInLocal(); // tamanho renderizado da imagem
-        double renderedW = b.getWidth();
-        double renderedH = b.getHeight();
-
-        // center image horizontally inside logical width w
-        double offsetX = (w - renderedW) / 2.0;
-        if (Double.isNaN(offsetX)) offsetX = 0;
-
-        // alinhar a imagem no topo do "slot" lógico (para a lata ficar "em cima" do chão)
-        double offsetY = 0;
+        // For collector, place the image so its visual bottom sits at node's bottom.
+        // We'll center it horizontally within its renderedW width (node is anchored at x,y)
+        double offsetX = 0;
+        double offsetY = 0; // render at top of node; we'll position node so it appears at y.
 
         imageView.setTranslateX(offsetX);
         imageView.setTranslateY(offsetY);
 
-        // hitbox cobre a parte visível da imagem (pode ajustar inset/extra)
-        double hbX = offsetX + collisionInset;
-        double hbY = offsetY + collisionInset - hitboxExtraTop;
-        double hbW = Math.max(0, renderedW - 2 * collisionInset);
-        double hbH = Math.max(0, renderedH - 2 * collisionInset + hitboxExtraBottom);
+        // Create hitbox that covers the lower center portion of the visible sprite.
+        // Heuristics tuned for a typical trash bin: narrow width and placed near bottom.
+        double hbW = Math.max(12, renderedW * 0.55);
+        double hbH = Math.max(12, renderedH * 0.32);
 
-        hitboxRect.setTranslateX(hbX);
-        hitboxRect.setTranslateY(hbY);
+        hitboxXLocal = offsetX + (renderedW - hbW) / 2.0;
+        hitboxYLocal = offsetY + renderedH - hbH - (renderedH * 0.04);
+
+        hitboxRect.setTranslateX(hitboxXLocal);
+        hitboxRect.setTranslateY(hitboxYLocal);
         hitboxRect.setWidth(hbW);
         hitboxRect.setHeight(hbH);
     }
 
-    public void setDebug(boolean debug) {
-        this.debug = debug;
-        if (debug) {
-            hitboxRect.setStroke(Color.color(1, 0, 0, 0.85));
-            hitboxRect.setStrokeWidth(2.0);
-        } else {
-            hitboxRect.setStroke(Color.color(1, 0, 0, 0));
-        }
-    }
-
-    public void setCollisionInset(double inset) {
-        this.collisionInset = Math.max(0, inset);
-        Platform.runLater(this::updateHitboxFromImage);
-    }
-
-    // expande/contrai a hitbox acima/abaixo da imagem (útil para cobrir o corpo da lata)
-    public void setHitboxExtra(double extraTop, double extraBottom) {
-        this.hitboxExtraTop = Math.max(0, extraTop);
-        this.hitboxExtraBottom = Math.max(0, extraBottom);
-        Platform.runLater(this::updateHitboxFromImage);
-    }
-
-    public void setSize(double newW, double newH) {
-        this.w = newW;
-        this.h = newH;
-        if (imageView != null) {
-            imageView.setFitHeight(newH);
-        }
-        Platform.runLater(this::updateHitboxFromImage);
-        updateView();
-    }
-
-    public void moveBy(double dx) { x += dx; updateView(); }
-
-    public void clamp(double minX, double maxWidth) {
-        x = Math.max(minX, Math.min(maxWidth - w, x));
+    // called by game loop to move collector according to input (-1 left, 0 still, 1 right)
+    public void applyInput(double dir, double screenWidth) {
+        double speed = Math.max(6.0, screenWidth * 0.012); // adapt speed to screen width
+        x += dir * speed;
+        // clamp so that the visible sprite doesn't go off-screen
+        double visibleW = renderedW > 0 ? renderedW : (desiredHeight * (imageView.getImage().getWidth() / imageView.getImage().getHeight()));
+        if (x < 0) x = 0;
+        if (x + visibleW > screenWidth) x = screenWidth - visibleW;
         updateView();
     }
 
     public void updateView() {
-        view.setTranslateX(x);
-        view.setTranslateY(y);
-        Platform.runLater(this::updateHitboxFromImage);
+        node.setTranslateX(x);
+        node.setTranslateY(y);
+        // ensure hitbox is updated (in case render info changed)
+        updateHitboxFromImage();
     }
 
-    // usa a hitbox calculada (coordenadas globais) para colisões com itens
-    public boolean intersects(GameItem gi) {
-        // hitbox global:
-        double hbX = x + hitboxRect.getTranslateX();
-        double hbY = y + hitboxRect.getTranslateY();
-        double hbW = hitboxRect.getWidth();
-        double hbH = hitboxRect.getHeight();
+    public Node getNode() {
+        return node;
+    }
 
-        Rectangle2D ri = new Rectangle2D(hbX, hbY, Math.max(0, hbW), Math.max(0, hbH));
-        Rectangle2D rj = new Rectangle2D(gi.x, gi.y, gi.size, gi.size);
+    public void setLeft(boolean v) { this.left = v; }
+    public void setRight(boolean v) { this.right = v; }
+
+    public void setHitboxVisible(boolean visible) {
+        hitboxRect.setVisible(visible);
+    }
+
+    // crate intersection check with GameItem using global coordinates
+    public boolean intersects(GameItem item) {
+        Bounds hb = hitboxRect.localToScene(hitboxRect.getBoundsInLocal());
+        Rectangle2D ri = new Rectangle2D(hb.getMinX(), hb.getMinY(), hb.getWidth(), hb.getHeight());
+        Rectangle2D rj = item.getGlobalBounds();
         return ri.intersects(rj);
+    }
+
+    // convenience getter bounding rect in scene coords
+    public Rectangle2D getBounds() {
+        Bounds hb = hitboxRect.localToScene(hitboxRect.getBoundsInLocal());
+        return new Rectangle2D(hb.getMinX(), hb.getMinY(), hb.getWidth(), hb.getHeight());
     }
 }
