@@ -37,7 +37,7 @@ public class GameItem {
             case METAL -> "BrokenBottle.png";
             case PLASTIC -> "BananaPeel.png";
             case REUSE -> "DirtyPaper.png";
-            case BATTERY -> "RottenApple.png";
+            case BATTERY -> "Bomba.png";
             default -> null;
         };
 

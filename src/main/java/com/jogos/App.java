@@ -288,7 +288,7 @@ public class App extends Application {
 
     // ---------- game logic ----------
     private void spawnItem() {
-        // choose size relative to screen (bigger than before)
+        // tamanho proporcional à tela
         double size = Math.max(48, screenW * 0.07);
         double x = 12 + rng.nextDouble() * (screenW - size - 24);
         double y = -size - rng.nextDouble(10, 80);
@@ -296,10 +296,20 @@ public class App extends Application {
         ItemType t = ItemType.values()[rng.nextInt(ItemType.values().length)];
         GameItem gi = new GameItem(t, x, y, size);
         items.add(gi);
+
+        // adiciona o item na tela
         gamePane.getChildren().add(gi.getNode());
-        // keep HUD and collector on top
-        gamePane.getChildren().remove(hud);
-        gamePane.getChildren().addAll(collector.getNode(), hud);
+
+        // mantém o coletor e o HUD sempre por cima
+        if (!gamePane.getChildren().contains(collector.getNode())) {
+            gamePane.getChildren().add(collector.getNode());
+        }
+        if (!gamePane.getChildren().contains(hud)) {
+            gamePane.getChildren().add(hud);
+        } else {
+            gamePane.getChildren().remove(hud);
+            gamePane.getChildren().add(hud);
+        }
     }
 
     private void updateItems(double deltaSeconds) {
