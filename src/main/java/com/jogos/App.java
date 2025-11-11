@@ -61,7 +61,7 @@ public class App extends Application {
     private boolean leftPressed = false;
     private boolean rightPressed = false;
 
-    // Altura "real" do chão, usada para posicionar coletor e hitbox
+    // Altura "real" do chão
     private double visibleGroundHeight;
 
     @Override
@@ -156,28 +156,22 @@ public class App extends Application {
     private void createGround() {
         Image img = new Image(getClass().getResourceAsStream("/com/jogos/Ground.png"));
         groundImage = new ImageView(img);
-
-        // Não distorce: usa a largura da tela e mantém proporção original
         groundImage.setFitWidth(screenW);
         groundImage.setPreserveRatio(true);
         groundImage.setSmooth(true);
 
-        // Altura visível real do chão (hitbox)
         visibleGroundHeight = screenH * 0.14;
 
-        // Posiciona a base da imagem na base da tela
         double imageHeight = groundImage.getBoundsInParent().getHeight();
         groundImage.setX(0);
         groundImage.setY(screenH - imageHeight);
 
-        // Hitbox invisível do chão
         ground = new Rectangle(0, screenH - visibleGroundHeight, screenW, visibleGroundHeight);
         ground.setVisible(false);
 
         gamePane.getChildren().removeAll(groundImage, ground);
         gamePane.getChildren().addAll(groundImage, ground);
     }
-
 
     private void buildHud() {
         scoreLabel = new Label("Score: 0");
@@ -196,14 +190,14 @@ public class App extends Application {
     }
 
     private void createCollector() {
-        // Mantém proporção original (20% da altura da tela)
         double collectorHeight = screenH * 0.20;
         double groundTopY = ground.getY();
-        double collectorY = groundTopY - collectorHeight + 60; // desce um pouco mais em Y
-        double collectorX = (screenW - (screenW * 0.14)) / 2.0; // mesma lógica de X que estava funcionando
+        double collectorY = groundTopY - collectorHeight + 60;
+        double collectorX = (screenW - (screenW * 0.14)) / 2.0;
 
         collector = new Collector(collectorX, collectorY, collectorHeight);
     }
+
     private void ensureCollectorAndHudOnPane() {
         gamePane.getChildren().removeAll(collector.getNode(), hud);
         gamePane.getChildren().addAll(collector.getNode(), hud);
@@ -229,16 +223,15 @@ public class App extends Application {
 
         mainMenuPane.getChildren().addAll(title, playBtn, optionsBtn, creditsBtn, exitBtn);
     }
-    private void showCredits() {
-    CreditsScreen credits = new CreditsScreen(rootStack, () -> {
-        // Ao terminar, retorna ao menu
-        if (!rootStack.getChildren().contains(mainMenuPane))
-            rootStack.getChildren().add(mainMenuPane);
-    });
-    rootStack.getChildren().remove(mainMenuPane);
-    credits.show();
-}
 
+    private void showCredits() {
+        CreditsScreen credits = new CreditsScreen(rootStack, () -> {
+            if (!rootStack.getChildren().contains(mainMenuPane))
+                rootStack.getChildren().add(mainMenuPane);
+        });
+        rootStack.getChildren().remove(mainMenuPane);
+        credits.show();
+    }
 
     private void createOptionsMenu() {
         optionsPane = new VBox(10);
@@ -291,10 +284,41 @@ public class App extends Application {
                     primaryStage.setWidth(w);
                     primaryStage.setHeight(h);
                     updateScreenSizeFromStage();
-                } catch (Exception ignored) {
-                }
+                } catch (Exception ignored) {}
             }
         });
+
+        // === CONTROLE DE ÁUDIO ===
+        Label volumeLabel = new Label("Volume: 100%");
+        volumeLabel.setPrefWidth(280);
+        volumeLabel.setPrefHeight(40);
+        volumeLabel.setAlignment(Pos.CENTER);
+        volumeLabel.setStyle(
+                "-fx-background-color: white;" +
+                        "-fx-text-fill: black;" +
+                        "-fx-font-size: 16px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 10;"
+        );
+
+        Slider volumeSlider = new Slider(0, 100, 100);
+        volumeSlider.setPrefWidth(200);       // largura inicial
+        volumeSlider.setMaxWidth(250);        // limite máximo proporcional
+        volumeSlider.setMinWidth(150);        // limite mínimo proporcional
+        volumeSlider.setStyle(
+                "-fx-control-inner-background: white;" +
+                        "-fx-accent: #0078D7;" +
+                        "-fx-background-radius: 10;"
+        );
+        volumeSlider.setMaxWidth(250);
+        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int percent = newVal.intValue();
+            volumeLabel.setText("Volume: " + percent + "%");
+            SoundManager.setGlobalVolume(percent / 100.0);
+        });
+
+
+
 
         Button backToMenuBtn = makeMenuButton("Voltar ao Menu Principal", e -> {
             hideOptions();
@@ -302,7 +326,7 @@ public class App extends Application {
         });
         Button backBtn = makeMenuButton("Voltar ao Jogo", e -> hideOptions());
 
-        VBox inner = new VBox(10, title, fullscreenBtn, resLabel, resolutionBox, backToMenuBtn, backBtn);
+        VBox inner = new VBox(10, title, fullscreenBtn, resLabel, resolutionBox, volumeLabel, volumeSlider, backToMenuBtn, backBtn);
         inner.setAlignment(Pos.CENTER);
         optionsPane.getChildren().add(inner);
     }
@@ -322,17 +346,13 @@ public class App extends Application {
         return btn;
     }
 
-    // ==== GAME LOOP SUPPORT ====
     private void startGame() {
         inMenu = false;
         rootStack.getChildren().removeAll(mainMenuPane, optionsPane);
         showingOptions = false;
-
-        // mostra a introdução sobre o jogo
         IntroScreen intro = new IntroScreen(rootStack, this::resetGame);
         intro.show();
     }
-
 
     private void resetGame() {
         score = 0;
@@ -442,7 +462,6 @@ public class App extends Application {
         gamePane.setPrefSize(screenW, screenH);
         hud.setMinWidth(screenW);
 
-        // atualiza ground
         groundImage.setFitWidth(screenW);
         groundImage.setPreserveRatio(true);
         groundImage.setSmooth(true);
@@ -454,10 +473,9 @@ public class App extends Application {
         ground.setHeight(visibleGroundHeight);
         ground.setY(screenH - visibleGroundHeight);
 
-        // atualiza collector
         double collectorHeight = screenH * 0.20;
-        double collectorY = ground.getY() - collectorHeight + 15; // mesma lógica do createCollector
-        double collectorX = collector.getNode().getTranslateX(); // mantém X atual
+        double collectorY = ground.getY() - collectorHeight + 15;
+        double collectorX = collector.getNode().getTranslateX();
         gamePane.getChildren().remove(collector.getNode());
         collector = new Collector(collectorX, collectorY, collectorHeight);
         ensureCollectorAndHudOnPane();
