@@ -221,13 +221,24 @@ public class App extends Application {
 
         Button playBtn = makeMenuButton("Jogar", e -> startGame());
         Button optionsBtn = makeMenuButton("Opções", e -> showOptions());
+        Button creditsBtn = makeMenuButton("Créditos", e -> showCredits());
         Button exitBtn = makeMenuButton("Sair", e -> {
             HighScoreManager.save(HIGH_SCORE_FILE, highScore);
             System.exit(0);
         });
 
-        mainMenuPane.getChildren().addAll(title, playBtn, optionsBtn, exitBtn);
+        mainMenuPane.getChildren().addAll(title, playBtn, optionsBtn, creditsBtn, exitBtn);
     }
+    private void showCredits() {
+    CreditsScreen credits = new CreditsScreen(rootStack, () -> {
+        // Ao terminar, retorna ao menu
+        if (!rootStack.getChildren().contains(mainMenuPane))
+            rootStack.getChildren().add(mainMenuPane);
+    });
+    rootStack.getChildren().remove(mainMenuPane);
+    credits.show();
+}
+
 
     private void createOptionsMenu() {
         optionsPane = new VBox(10);
@@ -316,8 +327,12 @@ public class App extends Application {
         inMenu = false;
         rootStack.getChildren().removeAll(mainMenuPane, optionsPane);
         showingOptions = false;
-        resetGame();
+
+        // mostra a introdução sobre o jogo
+        IntroScreen intro = new IntroScreen(rootStack, this::resetGame);
+        intro.show();
     }
+
 
     private void resetGame() {
         score = 0;
