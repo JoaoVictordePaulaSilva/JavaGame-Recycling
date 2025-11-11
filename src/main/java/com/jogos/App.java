@@ -134,7 +134,7 @@ public class App extends Application {
                         spawnTimer = 0;
                         spawnInterval = Math.max(0.20, spawnInterval * 0.985);
                         itemFallSpeedFactor *= 1.008;
-                        spawnItem();
+                        spawnItems();
                     }
 
                     updateItems(deltaSeconds);
@@ -183,7 +183,7 @@ public class App extends Application {
         gamePane.getChildren().addAll(collector.getNode(), hud);
     }
 
-    // === Menus (iguais aos anteriores, sem placeholders extras) ===
+    // === Menus ===
     private void createMainMenu() {
         mainMenuPane = new VBox(12);
         mainMenuPane.setAlignment(Pos.CENTER);
@@ -225,10 +225,10 @@ public class App extends Application {
         resLabel.setAlignment(Pos.CENTER);
         resLabel.setStyle(
                 "-fx-background-color: white;" +
-                "-fx-text-fill: black;" +
-                "-fx-font-size: 16px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-background-radius: 10;"
+                        "-fx-text-fill: black;" +
+                        "-fx-font-size: 16px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 10;"
         );
 
         ComboBox<String> resolutionBox = new ComboBox<>();
@@ -236,12 +236,12 @@ public class App extends Application {
         resolutionBox.setValue((int) screenW + "x" + (int) screenH);
         resolutionBox.setStyle(
                 "-fx-font-size: 16px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-background-color: white;" +
-                "-fx-text-fill: black;" +
-                "-fx-background-radius: 10;" +
-                "-fx-border-color: transparent;" +
-                "-fx-alignment: center;"
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-color: white;" +
+                        "-fx-text-fill: black;" +
+                        "-fx-background-radius: 10;" +
+                        "-fx-border-color: transparent;" +
+                        "-fx-alignment: center;"
         );
         resolutionBox.setOnAction(e -> {
             String val = resolutionBox.getValue();
@@ -254,7 +254,8 @@ public class App extends Application {
                     primaryStage.setWidth(w);
                     primaryStage.setHeight(h);
                     updateScreenSizeFromStage();
-                } catch (Exception ignored) {}
+                } catch (Exception ignored) {
+                }
             }
         });
 
@@ -275,10 +276,10 @@ public class App extends Application {
         btn.setPrefHeight(40);
         btn.setStyle(
                 "-fx-background-color: white;" +
-                "-fx-text-fill: black;" +
-                "-fx-font-size: 16px;" +
-                "-fx-font-weight: bold;" +
-                "-fx-background-radius: 10;"
+                        "-fx-text-fill: black;" +
+                        "-fx-font-size: 16px;" +
+                        "-fx-font-weight: bold;" +
+                        "-fx-background-radius: 10;"
         );
         btn.setOnAction(action);
         return btn;
@@ -318,13 +319,18 @@ public class App extends Application {
     }
 
     private void showOptionsFromGame() {
-        if (!showingOptions) {
-            showOptions();
-        } else hideOptions();
+        if (!showingOptions) showOptions();
+        else hideOptions();
     }
 
-    private void spawnItem() {
-        double size = Math.max(48, screenW * 0.07);
+    // 🔹 Spawn atualizado: itens menores + mais de 1 por spawn
+    private void spawnItems() {
+        int spawns = 1 + rng.nextInt(2); // 1 ou 2 itens
+        for (int i = 0; i < spawns; i++) spawnItemOnce();
+    }
+
+    private void spawnItemOnce() {
+        double size = Math.max(48, screenW * 0.07 * 0.70); // escala menor
         double x = 12 + rng.nextDouble() * (screenW - size - 24);
         double y = -size - rng.nextDouble(10, 80);
         ItemType t = ItemType.values()[rng.nextInt(ItemType.values().length)];
@@ -333,6 +339,7 @@ public class App extends Application {
         gamePane.getChildren().add(gi.getNode());
         ensureCollectorAndHudOnPane();
     }
+
 
     private void updateItems(double deltaSeconds) {
         double fall = screenH * itemFallSpeedFactor * deltaSeconds * 60.0;
