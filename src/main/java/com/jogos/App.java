@@ -5,116 +5,99 @@ import javafx.application.Application;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
-import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.input.KeyCode;
+import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
+import javafx.scene.shape.Rectangle;
 import javafx.scene.text.Font;
 import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Iterator;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 
 public class App extends Application {
 
-    // Persistência highscore
     private static final Path HIGH_SCORE_FILE = Path.of("highscore.txt");
 
-    // UI root panes
-    private StackPane rootStack;     // tem gamePane + overlays
-    private Pane gamePane;           // onde o jogo roda
-    private VBox mainMenuPane;       // menu inicial
-    private VBox optionsPane;        // menu de opções (overlay)
+    private StackPane rootStack;
+    private Pane gamePane;
+    private VBox mainMenuPane;
+    private VBox optionsPane;
+    private Rectangle ground;
 
-    // HUD
     private HBox hud;
     private Label scoreLabel;
     private Label livesLabel;
     private Label highScoreLabel;
 
-    // Game objects
     private Collector collector;
     private final List<GameItem> items = new ArrayList<>();
     private final Random rng = new Random();
 
-    // Screen size (adaptável)
     private double screenW;
     private double screenH;
 
-    // State
+    private Stage primaryStage;
+
     private boolean showingOptions = false;
     private boolean inMenu = true;
     private boolean showHitboxes = false;
 
-    // Gameplay variables
     private int score = 0;
     private int lives = 3;
     private int highScore = 0;
     private double spawnTimer = 0.0;
     private double spawnInterval = 1.0;
-    private double itemFallSpeedFactor = 0.0025; // times screen height per frame tick
+    private double itemFallSpeedFactor = 0.0025;
 
-    // Input flags
     private boolean leftPressed = false;
     private boolean rightPressed = false;
 
     @Override
     public void start(Stage stage) {
-        // screen bounds (works across resolutions)
+        this.primaryStage = stage;
+
         Rectangle2D bounds = Screen.getPrimary().getBounds();
         screenW = bounds.getWidth();
         screenH = bounds.getHeight();
 
-        // load highs
         highScore = HighScoreManager.load(HIGH_SCORE_FILE);
 
-        // root stack
         rootStack = new StackPane();
         Scene scene = new Scene(rootStack, screenW, screenH);
         stage.setScene(scene);
-        stage.setTitle("ReciclaMack - Fullscreen");
-        stage.setFullScreen(true);
-        stage.setFullScreenExitHint("");
+        stage.setTitle("ReciclaMack");
 
-        // game pane (background)
+        stage.setFullScreenExitHint("");
+        stage.setFullScreenExitKeyCombination(KeyCombination.NO_MATCH);
+        stage.setFullScreen(true);
+
         gamePane = new Pane();
         gamePane.setPrefSize(screenW, screenH);
         gamePane.setStyle("-fx-background-color: linear-gradient(#b3e5fc, #ffffff);");
 
-        // HUD (top)
+        // === CRIAÇÃO DO GROUND ===
+        createGround();
+
         buildHud();
+        createCollector();
+        ensureCollectorAndHudOnPane();
 
-        // Collector: tamanho mais visível (proporção à tela)
-        double collectorDesiredHeight = screenH * 0.20; // 20% da altura da tela
-        double collectorX = (screenW - (screenW * 0.14)) / 2.0;
-        double collectorY = screenH - collectorDesiredHeight - (screenH * 0.03);
-        collector = new Collector(collectorX, collectorY, collectorDesiredHeight);
-        gamePane.getChildren().addAll(collector.getNode()); // hitbox e image dentro do node
-
-        // keep hud on top
-        gamePane.getChildren().add(hud);
-
-        // create menus
         createMainMenu();
         createOptionsMenu();
 
-        rootStack.getChildren().addAll(gamePane, mainMenuPane); // menu por cima inicialmente
+        rootStack.getChildren().addAll(gamePane, mainMenuPane);
 
-        // key input: global
         scene.setOnKeyPressed(e -> {
             KeyCode c = e.getCode();
             if (inMenu) {
-                // allow keyboard navigation (ENTER for play)
                 if (c == KeyCode.ENTER) startGame();
                 if (c == KeyCode.ESCAPE && showingOptions) hideOptions();
             } else {
-                // in game
                 if (c == KeyCode.LEFT || c == KeyCode.A) leftPressed = true;
                 if (c == KeyCode.RIGHT || c == KeyCode.D) rightPressed = true;
                 if (c == KeyCode.H) toggleHitboxes();
@@ -128,32 +111,32 @@ public class App extends Application {
             if (c == KeyCode.RIGHT || c == KeyCode.D) rightPressed = false;
         });
 
-        // game loop
         AnimationTimer loop = new AnimationTimer() {
             private long last = 0;
+
             @Override
             public void handle(long now) {
-                if (last == 0) { last = now; return; }
+                if (last == 0) {
+                    last = now;
+                    return;
+                }
                 double deltaSeconds = (now - last) / 1_000_000_000.0;
                 last = now;
 
                 if (!inMenu) {
-                    // update collector movement
                     double moveDir = 0;
                     if (leftPressed) moveDir -= 1;
                     if (rightPressed) moveDir += 1;
                     collector.applyInput(moveDir, screenW);
 
-                    // spawn items by timer
                     spawnTimer += deltaSeconds;
                     if (spawnTimer >= spawnInterval) {
                         spawnTimer = 0;
-                        // slightly speed up spawn interval over time
-                        spawnInterval = Math.max(0.25, spawnInterval * 0.997);
+                        spawnInterval = Math.max(0.20, spawnInterval * 0.985);
+                        itemFallSpeedFactor *= 1.008;
                         spawnItem();
                     }
 
-                    // update items
                     updateItems(deltaSeconds);
                 }
             }
@@ -163,13 +146,21 @@ public class App extends Application {
         stage.show();
     }
 
-    // ---------- UI builders ----------
+    private void createGround() {
+        double groundHeight = screenH * 0.07;
+        ground = new Rectangle(0, screenH - groundHeight, screenW, groundHeight);
+        ground.setFill(Color.rgb(110, 70, 40)); // marrom claro
+        ground.setStroke(Color.rgb(90, 60, 30));
+        ground.setStrokeWidth(2);
+        gamePane.getChildren().add(ground);
+    }
+
     private void buildHud() {
         scoreLabel = new Label("Score: 0");
-        scoreLabel.setFont(Font.font(20));
         livesLabel = new Label("Lives: " + lives);
-        livesLabel.setFont(Font.font(20));
         highScoreLabel = new Label("High: " + highScore);
+        scoreLabel.setFont(Font.font(20));
+        livesLabel.setFont(Font.font(20));
         highScoreLabel.setFont(Font.font(20));
 
         Region spacer = new Region();
@@ -178,94 +169,144 @@ public class App extends Application {
         hud = new HBox(12, scoreLabel, livesLabel, spacer, highScoreLabel);
         hud.setPadding(new Insets(10));
         hud.setMinWidth(screenW);
-        hud.setTranslateY(8);
-        hud.setTranslateX(12);
     }
 
+    private void createCollector() {
+        double collectorHeight = screenH * 0.20;
+        double groundTopY = ground.getY();
+        double collectorY = groundTopY - collectorHeight + 10; // “em cima” do chão
+        collector = new Collector((screenW - (screenW * 0.14)) / 2.0, collectorY, collectorHeight);
+    }
+
+    private void ensureCollectorAndHudOnPane() {
+        gamePane.getChildren().removeAll(collector.getNode(), hud);
+        gamePane.getChildren().addAll(collector.getNode(), hud);
+    }
+
+    // === Menus (iguais aos anteriores, sem placeholders extras) ===
     private void createMainMenu() {
         mainMenuPane = new VBox(12);
         mainMenuPane.setAlignment(Pos.CENTER);
-        mainMenuPane.setPrefSize(screenW, screenH);
         mainMenuPane.setStyle("-fx-background-color: rgba(0,0,0,0.45);");
 
         Label title = new Label("RECICLA MACK");
         title.setFont(Font.font(48));
         title.setTextFill(Color.WHITE);
 
-        Button playBtn = new Button("Jogar");
-        playBtn.setPrefWidth(280);
-        playBtn.setOnAction(e -> startGame());
-
-        Button optionsBtn = new Button("Opções");
-        optionsBtn.setPrefWidth(280);
-        optionsBtn.setOnAction(e -> showOptions());
-
-        Button exitBtn = new Button("Sair");
-        exitBtn.setPrefWidth(280);
-        exitBtn.setOnAction(e -> {
-            // salva highscore e fecha
+        Button playBtn = makeMenuButton("Jogar", e -> startGame());
+        Button optionsBtn = makeMenuButton("Opções", e -> showOptions());
+        Button exitBtn = makeMenuButton("Sair", e -> {
             HighScoreManager.save(HIGH_SCORE_FILE, highScore);
             System.exit(0);
         });
 
-        VBox box = new VBox(10, title, playBtn, optionsBtn, exitBtn);
-        box.setAlignment(Pos.CENTER);
-        mainMenuPane.getChildren().add(box);
+        mainMenuPane.getChildren().addAll(title, playBtn, optionsBtn, exitBtn);
     }
 
     private void createOptionsMenu() {
         optionsPane = new VBox(10);
         optionsPane.setAlignment(Pos.CENTER);
-        optionsPane.setPrefSize(screenW, screenH);
-        optionsPane.setStyle("-fx-background-color: rgba(10,10,10,0.65);");
+        optionsPane.setStyle("-fx-background-color: rgba(0,0,0,0.6);");
         optionsPane.setVisible(false);
 
         Label title = new Label("Opções");
         title.setFont(Font.font(32));
         title.setTextFill(Color.WHITE);
 
-        // Placeholder controls
-        Slider masterVol = new Slider(0, 100, 80);
-        masterVol.setPrefWidth(380);
-        Label masterLabel = new Label("Volume (placeholder)");
+        Button fullscreenBtn = makeMenuButton("Alternar Tela Cheia / Janela", e -> {
+            boolean fs = !primaryStage.isFullScreen();
+            primaryStage.setFullScreen(fs);
+            updateScreenSizeFromStage();
+        });
 
-        ChoiceBox<String> difficulty = new ChoiceBox<>();
-        difficulty.getItems().addAll("Fácil", "Normal", "Difícil");
-        difficulty.setValue("Normal");
+        Label resLabel = new Label("Resolução (modo janela)");
+        resLabel.setPrefWidth(280);
+        resLabel.setPrefHeight(40);
+        resLabel.setAlignment(Pos.CENTER);
+        resLabel.setStyle(
+                "-fx-background-color: white;" +
+                "-fx-text-fill: black;" +
+                "-fx-font-size: 16px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10;"
+        );
 
-        Label controlsLabel = new Label("Controles (placeholder)");
-        Button restoreDefaults = new Button("Restaurar padrões (placeholder)");
-        Button backBtn = new Button("Voltar");
-        backBtn.setOnAction(e -> hideOptions());
+        ComboBox<String> resolutionBox = new ComboBox<>();
+        resolutionBox.getItems().addAll("1024x576", "1280x720", "1600x900", "1920x1080");
+        resolutionBox.setValue((int) screenW + "x" + (int) screenH);
+        resolutionBox.setStyle(
+                "-fx-font-size: 16px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-color: white;" +
+                "-fx-text-fill: black;" +
+                "-fx-background-radius: 10;" +
+                "-fx-border-color: transparent;" +
+                "-fx-alignment: center;"
+        );
+        resolutionBox.setOnAction(e -> {
+            String val = resolutionBox.getValue();
+            if (val != null && !val.isEmpty()) {
+                String[] parts = val.split("x");
+                try {
+                    int w = Integer.parseInt(parts[0]);
+                    int h = Integer.parseInt(parts[1]);
+                    primaryStage.setFullScreen(false);
+                    primaryStage.setWidth(w);
+                    primaryStage.setHeight(h);
+                    updateScreenSizeFromStage();
+                } catch (Exception ignored) {}
+            }
+        });
 
-        VBox inner = new VBox(8, title, masterLabel, masterVol, new Label("Dificuldade"), difficulty, controlsLabel, restoreDefaults, backBtn);
+        Button backToMenuBtn = makeMenuButton("Voltar ao Menu Principal", e -> {
+            hideOptions();
+            endGame();
+        });
+        Button backBtn = makeMenuButton("Voltar ao Jogo", e -> hideOptions());
+
+        VBox inner = new VBox(10, title, fullscreenBtn, resLabel, resolutionBox, backToMenuBtn, backBtn);
         inner.setAlignment(Pos.CENTER);
         optionsPane.getChildren().add(inner);
     }
 
-    // ---------- menu actions ----------
+    private Button makeMenuButton(String text, javafx.event.EventHandler<javafx.event.ActionEvent> action) {
+        Button btn = new Button(text);
+        btn.setPrefWidth(280);
+        btn.setPrefHeight(40);
+        btn.setStyle(
+                "-fx-background-color: white;" +
+                "-fx-text-fill: black;" +
+                "-fx-font-size: 16px;" +
+                "-fx-font-weight: bold;" +
+                "-fx-background-radius: 10;"
+        );
+        btn.setOnAction(action);
+        return btn;
+    }
+
+    // ==== GAME LOOP SUPPORT ====
     private void startGame() {
-        // remove menu overlay and reset game state
         inMenu = false;
-        rootStack.getChildren().remove(mainMenuPane);
-        if (rootStack.getChildren().contains(optionsPane)) rootStack.getChildren().remove(optionsPane);
+        rootStack.getChildren().removeAll(mainMenuPane, optionsPane);
         showingOptions = false;
         resetGame();
     }
 
     private void resetGame() {
-        // reset game state variables
         score = 0;
         lives = 3;
         spawnInterval = 1.0;
         spawnTimer = 0;
+        itemFallSpeedFactor = 0.0025;
         items.forEach(it -> gamePane.getChildren().remove(it.getNode()));
         items.clear();
         updateHud();
+        ensureCollectorAndHudOnPane();
     }
 
     private void showOptions() {
-        if (!rootStack.getChildren().contains(optionsPane)) rootStack.getChildren().add(optionsPane);
+        if (!rootStack.getChildren().contains(optionsPane))
+            rootStack.getChildren().add(optionsPane);
         optionsPane.setVisible(true);
         showingOptions = true;
     }
@@ -277,75 +318,50 @@ public class App extends Application {
     }
 
     private void showOptionsFromGame() {
-        // overlay options during game
         if (!showingOptions) {
             showOptions();
-            inMenu = false; // still in game but options overlay
-        } else {
-            hideOptions();
-        }
+        } else hideOptions();
     }
 
-    // ---------- game logic ----------
     private void spawnItem() {
-        // tamanho proporcional à tela
         double size = Math.max(48, screenW * 0.07);
         double x = 12 + rng.nextDouble() * (screenW - size - 24);
         double y = -size - rng.nextDouble(10, 80);
-
         ItemType t = ItemType.values()[rng.nextInt(ItemType.values().length)];
         GameItem gi = new GameItem(t, x, y, size);
         items.add(gi);
-
-        // adiciona o item na tela
         gamePane.getChildren().add(gi.getNode());
-
-        // mantém o coletor e o HUD sempre por cima
-        if (!gamePane.getChildren().contains(collector.getNode())) {
-            gamePane.getChildren().add(collector.getNode());
-        }
-        if (!gamePane.getChildren().contains(hud)) {
-            gamePane.getChildren().add(hud);
-        } else {
-            gamePane.getChildren().remove(hud);
-            gamePane.getChildren().add(hud);
-        }
+        ensureCollectorAndHudOnPane();
     }
 
     private void updateItems(double deltaSeconds) {
-        // fall speed is proportional to screen height and itemFallSpeedFactor
-        double fall = screenH * itemFallSpeedFactor * deltaSeconds * 60.0; // tuned multiplier
+        double fall = screenH * itemFallSpeedFactor * deltaSeconds * 60.0;
         Iterator<GameItem> it = items.iterator();
         while (it.hasNext()) {
             GameItem gi = it.next();
             gi.y += fall;
             gi.updateView();
 
-            // if off screen remove
             if (gi.isOffScreen(screenH)) {
                 gamePane.getChildren().remove(gi.getNode());
                 it.remove();
                 continue;
             }
 
-            // collision using precise bounds (collector uses its hitbox)
             if (collector.intersects(gi)) {
-                // item collected
                 gamePane.getChildren().remove(gi.getNode());
                 it.remove();
                 score += switch (gi.type) {
                     case METAL -> 2;
                     case PLASTIC -> 1;
                     case REUSE -> 3;
-                    case BATTERY -> { lives -= 1; yield 0; }
+                    case BATTERY -> { lives--; yield 0; }
                 };
                 if (score > highScore) highScore = score;
                 if (lives <= 0) endGame();
                 updateHud();
             }
         }
-
-        // sync hitbox visibility
         collector.setHitboxVisible(showHitboxes);
         items.forEach(i -> i.setHitboxVisible(showHitboxes));
     }
@@ -357,18 +373,38 @@ public class App extends Application {
     }
 
     private void endGame() {
-        // show menu again
         inMenu = true;
         resetGame();
-        if (!rootStack.getChildren().contains(mainMenuPane)) rootStack.getChildren().add(mainMenuPane);
-        // save highscore
+        if (!rootStack.getChildren().contains(mainMenuPane))
+            rootStack.getChildren().add(mainMenuPane);
         HighScoreManager.save(HIGH_SCORE_FILE, highScore);
-        updateHud();
     }
 
-    // ---------- utilities ----------
     private void toggleHitboxes() {
         showHitboxes = !showHitboxes;
+    }
+
+    private void updateScreenSizeFromStage() {
+        Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
+        if (primaryStage.isFullScreen()) {
+            screenW = bounds.getWidth();
+            screenH = bounds.getHeight();
+        } else {
+            screenW = primaryStage.getWidth();
+            screenH = primaryStage.getHeight();
+        }
+        gamePane.setPrefSize(screenW, screenH);
+        hud.setMinWidth(screenW);
+
+        gamePane.getChildren().remove(ground);
+        createGround();
+
+        double collectorHeight = screenH * 0.20;
+        double groundTopY = ground.getY();
+        double collectorY = groundTopY - collectorHeight + 10;
+        gamePane.getChildren().remove(collector.getNode());
+        collector = new Collector(collector.getNode().getTranslateX(), collectorY, collectorHeight);
+        ensureCollectorAndHudOnPane();
     }
 
     public static void main(String[] args) {
