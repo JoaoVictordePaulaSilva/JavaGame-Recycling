@@ -7,6 +7,8 @@ import javafx.geometry.Pos;
 import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.image.Image;
+import javafx.scene.image.ImageView;
 import javafx.scene.input.KeyCode;
 import javafx.scene.input.KeyCombination;
 import javafx.scene.layout.*;
@@ -27,7 +29,9 @@ public class App extends Application {
     private Pane gamePane;
     private VBox mainMenuPane;
     private VBox optionsPane;
-    private Rectangle ground;
+
+    private ImageView groundImage;
+    private Rectangle ground; // hitbox invisível do chão
 
     private HBox hud;
     private Label scoreLabel;
@@ -57,6 +61,9 @@ public class App extends Application {
     private boolean leftPressed = false;
     private boolean rightPressed = false;
 
+    // Altura "real" do chão, usada para posicionar coletor e hitbox
+    private double visibleGroundHeight;
+
     @Override
     public void start(Stage stage) {
         this.primaryStage = stage;
@@ -80,9 +87,7 @@ public class App extends Application {
         gamePane.setPrefSize(screenW, screenH);
         gamePane.setStyle("-fx-background-color: linear-gradient(#b3e5fc, #ffffff);");
 
-        // === CRIAÇÃO DO GROUND ===
         createGround();
-
         buildHud();
         createCollector();
         ensureCollectorAndHudOnPane();
@@ -92,6 +97,7 @@ public class App extends Application {
 
         rootStack.getChildren().addAll(gamePane, mainMenuPane);
 
+        // Controles
         scene.setOnKeyPressed(e -> {
             KeyCode c = e.getCode();
             if (inMenu) {
@@ -111,6 +117,7 @@ public class App extends Application {
             if (c == KeyCode.RIGHT || c == KeyCode.D) rightPressed = false;
         });
 
+        // Game loop
         AnimationTimer loop = new AnimationTimer() {
             private long last = 0;
 
@@ -147,13 +154,30 @@ public class App extends Application {
     }
 
     private void createGround() {
-        double groundHeight = screenH * 0.07;
-        ground = new Rectangle(0, screenH - groundHeight, screenW, groundHeight);
-        ground.setFill(Color.rgb(110, 70, 40)); // marrom claro
-        ground.setStroke(Color.rgb(90, 60, 30));
-        ground.setStrokeWidth(2);
-        gamePane.getChildren().add(ground);
+        Image img = new Image(getClass().getResourceAsStream("/com/jogos/Ground.png"));
+        groundImage = new ImageView(img);
+
+        // Não distorce: usa a largura da tela e mantém proporção original
+        groundImage.setFitWidth(screenW);
+        groundImage.setPreserveRatio(true);
+        groundImage.setSmooth(true);
+
+        // Altura visível real do chão (hitbox)
+        visibleGroundHeight = screenH * 0.14;
+
+        // Posiciona a base da imagem na base da tela
+        double imageHeight = groundImage.getBoundsInParent().getHeight();
+        groundImage.setX(0);
+        groundImage.setY(screenH - imageHeight);
+
+        // Hitbox invisível do chão
+        ground = new Rectangle(0, screenH - visibleGroundHeight, screenW, visibleGroundHeight);
+        ground.setVisible(false);
+
+        gamePane.getChildren().removeAll(groundImage, ground);
+        gamePane.getChildren().addAll(groundImage, ground);
     }
+
 
     private void buildHud() {
         scoreLabel = new Label("Score: 0");
@@ -172,12 +196,14 @@ public class App extends Application {
     }
 
     private void createCollector() {
+        // Mantém proporção original (20% da altura da tela)
         double collectorHeight = screenH * 0.20;
         double groundTopY = ground.getY();
-        double collectorY = groundTopY - collectorHeight + 10; // “em cima” do chão
-        collector = new Collector((screenW - (screenW * 0.14)) / 2.0, collectorY, collectorHeight);
-    }
+        double collectorY = groundTopY - collectorHeight + 60; // desce um pouco mais em Y
+        double collectorX = (screenW - (screenW * 0.14)) / 2.0; // mesma lógica de X que estava funcionando
 
+        collector = new Collector(collectorX, collectorY, collectorHeight);
+    }
     private void ensureCollectorAndHudOnPane() {
         gamePane.getChildren().removeAll(collector.getNode(), hud);
         gamePane.getChildren().addAll(collector.getNode(), hud);
@@ -323,14 +349,13 @@ public class App extends Application {
         else hideOptions();
     }
 
-    // 🔹 Spawn atualizado: itens menores + mais de 1 por spawn
     private void spawnItems() {
-        int spawns = 1 + rng.nextInt(2); // 1 ou 2 itens
+        int spawns = 1 + rng.nextInt(2);
         for (int i = 0; i < spawns; i++) spawnItemOnce();
     }
 
     private void spawnItemOnce() {
-        double size = Math.max(48, screenW * 0.07 * 0.70); // escala menor
+        double size = Math.max(48, screenW * 0.07 * 0.70);
         double x = 12 + rng.nextDouble() * (screenW - size - 24);
         double y = -size - rng.nextDouble(10, 80);
         ItemType t = ItemType.values()[rng.nextInt(ItemType.values().length)];
@@ -339,7 +364,6 @@ public class App extends Application {
         gamePane.getChildren().add(gi.getNode());
         ensureCollectorAndHudOnPane();
     }
-
 
     private void updateItems(double deltaSeconds) {
         double fall = screenH * itemFallSpeedFactor * deltaSeconds * 60.0;
@@ -403,14 +427,24 @@ public class App extends Application {
         gamePane.setPrefSize(screenW, screenH);
         hud.setMinWidth(screenW);
 
-        gamePane.getChildren().remove(ground);
-        createGround();
+        // atualiza ground
+        groundImage.setFitWidth(screenW);
+        groundImage.setPreserveRatio(true);
+        groundImage.setSmooth(true);
 
+        double imageHeight = groundImage.getBoundsInParent().getHeight();
+        groundImage.setY(screenH - imageHeight);
+
+        ground.setWidth(screenW);
+        ground.setHeight(visibleGroundHeight);
+        ground.setY(screenH - visibleGroundHeight);
+
+        // atualiza collector
         double collectorHeight = screenH * 0.20;
-        double groundTopY = ground.getY();
-        double collectorY = groundTopY - collectorHeight + 10;
+        double collectorY = ground.getY() - collectorHeight + 15; // mesma lógica do createCollector
+        double collectorX = collector.getNode().getTranslateX(); // mantém X atual
         gamePane.getChildren().remove(collector.getNode());
-        collector = new Collector(collector.getNode().getTranslateX(), collectorY, collectorHeight);
+        collector = new Collector(collectorX, collectorY, collectorHeight);
         ensureCollectorAndHudOnPane();
     }
 
