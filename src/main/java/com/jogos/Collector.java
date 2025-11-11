@@ -10,7 +10,6 @@ import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Rectangle;
-import java.util.Objects;
 
 /**
  * Collector com personagem animado à direita (sincronizado com o movimento).
@@ -23,7 +22,6 @@ public class Collector {
     private final Rectangle hitboxRect;
     private final AnimatedSprite personagem;
 
-    // lógica original
     public double x, y;
     private final double desiredHeight;
     private final Rectangle2D visibleInImage;
@@ -32,35 +30,38 @@ public class Collector {
     private double hitboxXLocal = 0;
     private double hitboxYLocal = 0;
 
+    // controla a animação atual
+    private String currentAnimation = "Parado";
+
     public Collector(double x, double y, double desiredHeight) {
         this.x = x;
-        this.y = y;
+        // 🔹 Abaixa ainda mais o coletor no eixo Y
+        this.y = y + 60; 
         this.desiredHeight = desiredHeight;
 
-        // imagem original do coletor
         Image img = ImageLoader.load("MackTrashBin.png");
         Rectangle2D visible = ImageLoader.getVisibleBounds("MackTrashBin.png");
         this.visibleInImage = visible != null ? visible : new Rectangle2D(0, 0, img.getWidth(), img.getHeight());
 
         imageView = new ImageView(img);
         imageView.setViewport(this.visibleInImage);
-        imageView.setFitHeight(desiredHeight);
+
+        double coletorScale = 0.75;
+        imageView.setFitHeight(desiredHeight * coletorScale);
         imageView.setPreserveRatio(true);
         imageView.setSmooth(true);
 
-        // hitbox original
         hitboxRect = new Rectangle(10, 10);
         hitboxRect.setFill(Color.color(1, 0, 0, 0.0));
         hitboxRect.setStroke(Color.RED);
         hitboxRect.setStrokeWidth(2);
         hitboxRect.setVisible(false);
 
-        // personagem animado (altura igual à do coletor)
         personagem = new AnimatedSprite(
                 "com/jogos/Empurrando",
                 "com/jogos/Parado",
                 "com/jogos/Puxando",
-                desiredHeight * 0.95 // altura quase igual ao coletor
+                desiredHeight * 0.95
         );
 
         node = new Group(imageView, hitboxRect, personagem.getNode());
@@ -79,7 +80,7 @@ public class Collector {
         imageView.setTranslateY(offsetY);
 
         double hbW = Math.max(12, renderedW * 0.55);
-        double hbH = Math.max(12, renderedH * 0.32);
+        double hbH = Math.max(12, renderedH * 0.48);
         hitboxXLocal = offsetX + (renderedW - hbW) / 2.0;
         hitboxYLocal = offsetY + renderedH - hbH - (renderedH * 0.04);
 
@@ -90,7 +91,7 @@ public class Collector {
     }
 
     public void applyInput(double dir, double screenWidth) {
-        double speed = Math.max(6.0, screenWidth * 0.012); // velocidade original
+        double speed = Math.max(6.0, screenWidth * 0.012);
         x += dir * speed;
 
         double visibleW = renderedW > 0 ? renderedW :
@@ -98,12 +99,16 @@ public class Collector {
         if (x < 0) x = 0;
         if (x + visibleW > screenWidth) x = screenWidth - visibleW;
 
-        // animação conforme direção
-        if (dir < 0) personagem.play("Empurrando");
-        else if (dir > 0) personagem.play("Puxando");
-        else personagem.play("Parado");
+        if (dir < 0) setAnimation("Empurrando");
+        else if (dir > 0) setAnimation("Puxando");
+        else setAnimation("Parado");
 
         updateView();
+    }
+
+    private void setAnimation(String anim) {
+        currentAnimation = anim;
+        personagem.play(anim);
     }
 
     public void updateView() {
@@ -112,18 +117,25 @@ public class Collector {
 
         updateHitboxFromImage();
 
-        // Escala boa (mantida)
-        double escala = 3.0;
+        // 🔹 Escala menor
+        double escala = 4.0;
         personagem.getNode().setScaleX(escala);
         personagem.getNode().setScaleY(escala);
 
-        // Ajuste fino de posição
-        double personagemOffsetX = renderedW - 120; // encosta mais no coletor
-        double personagemOffsetY = renderedH - personagem.getHeight() - 10;
+        // 🔹 Ajuste horizontal independente
+        double personagemOffsetX = renderedW - 110;
+        switch (currentAnimation) {
+            case "Parado": personagemOffsetX += 15; break;
+            case "Empurrando": personagemOffsetX -= 10; break; // mov. esquerda 5px
+            case "Puxando": personagemOffsetX -= 10; break;    // mov. esquerda 5px
+        }
+
+        // 🔹 Ajuste vertical: sobe um pouco o personagem
+        double personagemOffsetY = renderedH - personagem.getHeight() - 70; // antes -35 → agora -45
+
         personagem.getNode().setTranslateX(personagemOffsetX);
         personagem.getNode().setTranslateY(personagemOffsetY);
     }
-
 
     public Node getNode() { return node; }
     public void setHitboxVisible(boolean visible) { hitboxRect.setVisible(visible); }
