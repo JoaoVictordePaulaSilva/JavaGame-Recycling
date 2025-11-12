@@ -16,45 +16,62 @@
     </properties>
 
     <dependencies>
+        <!-- JavaFX Controls (botões, janelas, etc.) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-controls</artifactId>
             <version>${javafx.version}</version>
         </dependency>
+
+        <!-- JavaFX FXML (caso use interfaces em .fxml) -->
         <dependency>
             <groupId>org.openjfx</groupId>
             <artifactId>javafx-fxml</artifactId>
             <version>${javafx.version}</version>
         </dependency>
+
+        <!-- JavaFX Graphics (necessário para sprites e imagens) -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-graphics</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
+
+        <!-- JavaFX Media (necessário para sons e música) -->
+        <dependency>
+            <groupId>org.openjfx</groupId>
+            <artifactId>javafx-media</artifactId>
+            <version>${javafx.version}</version>
+        </dependency>
     </dependencies>
 
     <build>
-<plugins>
-    <!-- Plugin JavaFX -->
-    <plugin>
-        <groupId>org.openjfx</groupId>
-        <artifactId>javafx-maven-plugin</artifactId>
-        <version>0.0.8</version>
-        <configuration>
-            <mainClass>com.jogos.App</mainClass>
-        </configuration>
-    </plugin>
-
-    <!-- Plugin para gerar jar com manifesto -->
-    <plugin>
-        <groupId>org.apache.maven.plugins</groupId>
-        <artifactId>maven-jar-plugin</artifactId>
-        <version>3.3.0</version>
-        <configuration>
-            <archive>
-                <manifest>
+        <plugins>
+            <!-- Plugin JavaFX para rodar via Maven -->
+            <plugin>
+                <groupId>org.openjfx</groupId>
+                <artifactId>javafx-maven-plugin</artifactId>
+                <version>0.0.8</version>
+                <configuration>
                     <mainClass>com.jogos.App</mainClass>
-                </manifest>
-            </archive>
-        </configuration>
-    </plugin>
+                </configuration>
+            </plugin>
 
-    <!-- Plugin para gerar JAR com todas as dependências -->
+            <!-- Plugin para gerar JAR simples com manifesto -->
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-jar-plugin</artifactId>
+                <version>3.3.0</version>
+                <configuration>
+                    <archive>
+                        <manifest>
+                            <mainClass>com.jogos.App</mainClass>
+                        </manifest>
+                    </archive>
+                </configuration>
+            </plugin>
+
+            <!-- Plugin para gerar JAR com dependências (para jpackage ou execução direta) -->
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>
                 <artifactId>maven-assembly-plugin</artifactId>
@@ -80,6 +97,5 @@
                 </executions>
             </plugin>
         </plugins>
-
     </build>
 </project>
