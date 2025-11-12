@@ -74,6 +74,10 @@ public class App extends Application {
 
         highScore = HighScoreManager.load(HIGH_SCORE_FILE);
 
+        // === Inicializa sons ===
+        SoundManager.init();
+        SoundManager.playMusic();
+
         rootStack = new StackPane();
         Scene scene = new Scene(rootStack, screenW, screenH);
         stage.setScene(scene);
@@ -97,7 +101,7 @@ public class App extends Application {
 
         rootStack.getChildren().addAll(gamePane, mainMenuPane);
 
-        // Controles
+        // === Controles de teclado ===
         scene.setOnKeyPressed(e -> {
             KeyCode c = e.getCode();
             if (inMenu) {
@@ -117,7 +121,7 @@ public class App extends Application {
             if (c == KeyCode.RIGHT || c == KeyCode.D) rightPressed = false;
         });
 
-        // Game loop
+        // === Game Loop ===
         AnimationTimer loop = new AnimationTimer() {
             private long last = 0;
 
@@ -251,28 +255,12 @@ public class App extends Application {
 
         Label resLabel = new Label("Resolução (modo janela)");
         resLabel.setPrefWidth(280);
-        resLabel.setPrefHeight(40);
         resLabel.setAlignment(Pos.CENTER);
-        resLabel.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-text-fill: black;" +
-                        "-fx-font-size: 16px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-background-radius: 10;"
-        );
+        resLabel.setStyle("-fx-background-color: white;-fx-text-fill: black;-fx-font-size: 16px;-fx-font-weight: bold;-fx-background-radius: 10;");
 
         ComboBox<String> resolutionBox = new ComboBox<>();
         resolutionBox.getItems().addAll("1024x576", "1280x720", "1600x900", "1920x1080");
         resolutionBox.setValue((int) screenW + "x" + (int) screenH);
-        resolutionBox.setStyle(
-                "-fx-font-size: 16px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-background-color: white;" +
-                        "-fx-text-fill: black;" +
-                        "-fx-background-radius: 10;" +
-                        "-fx-border-color: transparent;" +
-                        "-fx-alignment: center;"
-        );
         resolutionBox.setOnAction(e -> {
             String val = resolutionBox.getValue();
             if (val != null && !val.isEmpty()) {
@@ -288,37 +276,38 @@ public class App extends Application {
             }
         });
 
-        // === CONTROLE DE ÁUDIO ===
-        Label volumeLabel = new Label("Volume: 100%");
-        volumeLabel.setPrefWidth(280);
-        volumeLabel.setPrefHeight(40);
-        volumeLabel.setAlignment(Pos.CENTER);
-        volumeLabel.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-text-fill: black;" +
-                        "-fx-font-size: 16px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-background-radius: 10;"
-        );
+        // === CONTROLES DE ÁUDIO ===
+        Label musicLabel = new Label("Música: 100%");
+        musicLabel.setPrefWidth(280);
+        musicLabel.setAlignment(Pos.CENTER);
+        musicLabel.setStyle("-fx-background-color: white;-fx-text-fill: black;-fx-font-size: 16px;-fx-font-weight: bold;-fx-background-radius: 10;");
 
-        Slider volumeSlider = new Slider(0, 100, 100);
-        volumeSlider.setPrefWidth(200);       // largura inicial
-        volumeSlider.setMaxWidth(250);        // limite máximo proporcional
-        volumeSlider.setMinWidth(150);        // limite mínimo proporcional
-        volumeSlider.setStyle(
-                "-fx-control-inner-background: white;" +
-                        "-fx-accent: #0078D7;" +
-                        "-fx-background-radius: 10;"
-        );
-        volumeSlider.setMaxWidth(250);
-        volumeSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+        Slider musicSlider = new Slider(0, 100, 100);
+        musicSlider.setPrefWidth(200);
+        musicSlider.setMaxWidth(200);
+        musicSlider.setMinWidth(200);
+        musicSlider.setStyle("-fx-control-inner-background: lightgray;");
+        musicSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
             int percent = newVal.intValue();
-            volumeLabel.setText("Volume: " + percent + "%");
-            SoundManager.setGlobalVolume(percent / 100.0);
+            musicLabel.setText("Música: " + percent + "%");
+            SoundManager.setMusicVolume(percent / 100.0);
         });
 
+        Label effectsLabel = new Label("Efeitos: 100%");
+        effectsLabel.setPrefWidth(280);
+        effectsLabel.setAlignment(Pos.CENTER);
+        effectsLabel.setStyle("-fx-background-color: white;-fx-text-fill: black;-fx-font-size: 16px;-fx-font-weight: bold;-fx-background-radius: 10;");
 
-
+        Slider effectsSlider = new Slider(0, 100, 100);
+        effectsSlider.setPrefWidth(200);
+        effectsSlider.setMaxWidth(200);
+        effectsSlider.setMinWidth(200);
+        effectsSlider.setStyle("-fx-control-inner-background: lightgray;");
+        effectsSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            int percent = newVal.intValue();
+            effectsLabel.setText("Efeitos: " + percent + "%");
+            SoundManager.setEffectsVolume(percent / 100.0);
+        });
 
         Button backToMenuBtn = makeMenuButton("Voltar ao Menu Principal", e -> {
             hideOptions();
@@ -326,7 +315,8 @@ public class App extends Application {
         });
         Button backBtn = makeMenuButton("Voltar ao Jogo", e -> hideOptions());
 
-        VBox inner = new VBox(10, title, fullscreenBtn, resLabel, resolutionBox, volumeLabel, volumeSlider, backToMenuBtn, backBtn);
+        VBox inner = new VBox(10, title, fullscreenBtn, resLabel, resolutionBox,
+                musicLabel, musicSlider, effectsLabel, effectsSlider, backToMenuBtn, backBtn);
         inner.setAlignment(Pos.CENTER);
         optionsPane.getChildren().add(inner);
     }
@@ -335,13 +325,7 @@ public class App extends Application {
         Button btn = new Button(text);
         btn.setPrefWidth(280);
         btn.setPrefHeight(40);
-        btn.setStyle(
-                "-fx-background-color: white;" +
-                        "-fx-text-fill: black;" +
-                        "-fx-font-size: 16px;" +
-                        "-fx-font-weight: bold;" +
-                        "-fx-background-radius: 10;"
-        );
+        btn.setStyle("-fx-background-color: white;-fx-text-fill: black;-fx-font-size: 16px;-fx-font-weight: bold;-fx-background-radius: 10;");
         btn.setOnAction(action);
         return btn;
     }
@@ -350,6 +334,7 @@ public class App extends Application {
         inMenu = false;
         rootStack.getChildren().removeAll(mainMenuPane, optionsPane);
         showingOptions = false;
+        SoundManager.playMusic();
         IntroScreen intro = new IntroScreen(rootStack, this::resetGame);
         intro.show();
     }
@@ -417,12 +402,26 @@ public class App extends Application {
             if (collector.intersects(gi)) {
                 gamePane.getChildren().remove(gi.getNode());
                 it.remove();
-                score += switch (gi.type) {
-                    case METAL -> 2;
-                    case PLASTIC -> 1;
-                    case REUSE -> 3;
-                    case BATTERY -> { lives--; yield 0; }
-                };
+
+                switch (gi.type) {
+                    case METAL -> {
+                        score += 2;
+                        SoundManager.playCollect();
+                    }
+                    case PLASTIC -> {
+                        score += 1;
+                        SoundManager.playCollect();
+                    }
+                    case REUSE -> {
+                        score += 3;
+                        SoundManager.playCollect();
+                    }
+                    case BATTERY -> {
+                        lives--;
+                        SoundManager.playExplosion();
+                    }
+                }
+
                 if (score > highScore) highScore = score;
                 if (lives <= 0) endGame();
                 updateHud();
@@ -440,6 +439,7 @@ public class App extends Application {
 
     private void endGame() {
         inMenu = true;
+        SoundManager.stopMusic();
         resetGame();
         if (!rootStack.getChildren().contains(mainMenuPane))
             rootStack.getChildren().add(mainMenuPane);
