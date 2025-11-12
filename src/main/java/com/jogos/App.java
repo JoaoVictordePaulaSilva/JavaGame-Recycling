@@ -32,6 +32,7 @@ public class App extends Application {
 
     private ImageView groundImage;
     private Rectangle ground; // hitbox invisível do chão
+    private AnimatedBackground animatedBackground;
 
     private HBox hud;
     private Label scoreLabel;
@@ -89,7 +90,10 @@ public class App extends Application {
 
         gamePane = new Pane();
         gamePane.setPrefSize(screenW, screenH);
-        gamePane.setStyle("-fx-background-color: linear-gradient(#b3e5fc, #ffffff);");
+
+        // === Adiciona background animado ===
+        animatedBackground = new AnimatedBackground("com/jogos/BackGround", screenW, screenH);
+        gamePane.getChildren().add(animatedBackground.getView());
 
         createGround();
         buildHud();
@@ -173,7 +177,6 @@ public class App extends Application {
         ground = new Rectangle(0, screenH - visibleGroundHeight, screenW, visibleGroundHeight);
         ground.setVisible(false);
 
-        gamePane.getChildren().removeAll(groundImage, ground);
         gamePane.getChildren().addAll(groundImage, ground);
     }
 
