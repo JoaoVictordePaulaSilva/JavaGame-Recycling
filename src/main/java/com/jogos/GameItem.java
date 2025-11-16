@@ -34,12 +34,13 @@ public class GameItem {
 
         // resource mapping
         String res = switch (type) {
-            case METAL -> "BrokenBottle.png";
-            case PLASTIC -> "BananaPeel.png";
-            case REUSE -> "DirtyPaper.png";
-            case BATTERY -> "Bomba.png";
+            case METAL -> "BrokenComputer.png";
+            case PLASTIC -> "BrokenPhone.png";
+            case REUSE -> "Battery.png";
+            case BATTERY -> "Bomba.png";  
             default -> null;
         };
+
 
         Image img = null;
         if (res != null) img = ImageLoader.load(res);
