@@ -6,3 +6,5 @@ target/
 *.class
 *.jar
 *.war
+build/
+*.exe
